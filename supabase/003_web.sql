@@ -59,3 +59,7 @@ begin
     end if;
   end loop;
 end $$;
+
+-- La función solo devuelve tus propios chat_ids, pero no tiene sentido exponerla a usuarios sin login
+revoke execute on function public.mis_chat_ids() from public, anon;
+grant execute on function public.mis_chat_ids() to authenticated;

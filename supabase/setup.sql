@@ -6,7 +6,7 @@
 -- Correr completo en Supabase → SQL Editor → New query → Run
 -- =====================================================================
 
-create extension if not exists pg_trgm;
+create extension if not exists pg_trgm with schema extensions;
 
 -- ---------------------------------------------------------------------
 -- Usuarios (keyed por chat_id de Telegram; para escalar a multiusuario
@@ -48,7 +48,7 @@ create table if not exists alimentos (
   creado_por     bigint references usuarios(chat_id) on delete set null,
   creado         timestamptz not null default now()
 );
-create index if not exists alimentos_nombre_trgm on alimentos using gin (nombre gin_trgm_ops);
+create index if not exists alimentos_nombre_trgm on alimentos using gin (nombre extensions.gin_trgm_ops);
 
 -- ---------------------------------------------------------------------
 -- Registro de comidas (cada fila = un alimento consumido)
@@ -122,7 +122,9 @@ create table if not exists updates_procesados (
 -- ---------------------------------------------------------------------
 create or replace function buscar_alimentos(q text, limite int default 6)
 returns setof alimentos
-language sql stable as $$
+language sql stable
+set search_path = public, extensions
+as $$
   select a.*
   from alimentos a
   where a.nombre ilike '%' || q || '%'
@@ -263,6 +265,10 @@ begin
     end if;
   end loop;
 end $$;
+
+-- La función solo devuelve tus propios chat_ids, pero no tiene sentido exponerla a usuarios sin login
+revoke execute on function public.mis_chat_ids() from public, anon;
+grant execute on function public.mis_chat_ids() to authenticated;
 
 -- ===== supabase/004_codigo_barras.sql =====
 -- =====================================================================
