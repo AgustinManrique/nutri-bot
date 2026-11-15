@@ -21,6 +21,11 @@ export const env = {
   get supabaseUrl() { return requerida('SUPABASE_URL'); },
   get supabaseKey() { return requerida('SUPABASE_SERVICE_ROLE_KEY'); },
   get geminiKey() { return requerida('GEMINI_API_KEY'); },
-  get geminiModel() { return process.env.GEMINI_MODEL || 'gemini-flash-latest'; },
+  /** Modelos a probar en orden: si uno no existe o no tiene cupo, se usa el siguiente */
+  get geminiModels(): string[] {
+    const fijo = process.env.GEMINI_MODEL?.trim();
+    const base = ['gemini-3.8-flash', 'gemini-3.6-flash', 'gemini-3.5-flash'];
+    return fijo ? [fijo, ...base.filter((m) => m !== fijo)] : base;
+  },
   get cronSecret() { return requerida('CRON_SECRET'); },
 };

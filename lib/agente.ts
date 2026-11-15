@@ -76,6 +76,31 @@ async function guardarMensajes(chatId: number, textoUsuario: string, textoModelo
   );
 }
 
+let modeloQueAnda: string | null = null;
+
+/** Llama a Gemini probando los modelos en orden si alguno no existe (404) o no tiene cupo (429) */
+async function generar(contents: Content[], systemInstruction: string) {
+  const candidatos = modeloQueAnda ? [modeloQueAnda, ...env.geminiModels.filter((m) => m !== modeloQueAnda)] : env.geminiModels;
+  let ultimoError: unknown;
+  for (const model of candidatos) {
+    try {
+      const resp = await cliente().models.generateContent({
+        model,
+        contents,
+        config: { systemInstruction, tools: [{ functionDeclarations: declaraciones }] },
+      });
+      modeloQueAnda = model;
+      return resp;
+    } catch (e) {
+      const status = (e as { status?: number }).status;
+      if (status !== 404 && status !== 429) throw e;
+      console.warn(`[gemini] ${model} no disponible (${status}), pruebo el siguiente`);
+      ultimoError = e;
+    }
+  }
+  throw ultimoError;
+}
+
 /**
  * Procesa un mensaje del usuario: arma contexto, corre el loop de tool calling y devuelve la respuesta final.
  * @param partes  partes para Gemini (texto, imagen, audio)
@@ -86,11 +111,7 @@ export async function responder(chatId: number, partes: Part[], textoHistorial: 
   const contents: Content[] = [...historial, { role: 'user', parts: partes }];
 
   for (let vuelta = 0; vuelta < MAX_VUELTAS; vuelta++) {
-    const resp = await cliente().models.generateContent({
-      model: env.geminiModel,
-      contents,
-      config: { systemInstruction, tools: [{ functionDeclarations: declaraciones }] },
-    });
+    const resp = await generar(contents, systemInstruction);
 
     const llamadas = resp.functionCalls ?? [];
     if (!llamadas.length) {
