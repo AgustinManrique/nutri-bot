@@ -9,10 +9,10 @@
   ],
   "functions": {
     "api/telegram.ts": {
-      "maxDuration": 60
+      "maxDuration": 300
     },
     "api/cron/cierre.ts": {
-      "maxDuration": 60
+      "maxDuration": 300
     }
   },
   "crons": [

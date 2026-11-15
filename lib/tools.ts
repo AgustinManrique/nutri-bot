@@ -33,21 +33,21 @@ export const declaraciones: FunctionDeclaration[] = [
   },
   {
     name: 'buscar_alimento',
-    description: 'Busca un alimento en la base y devuelve sus macros cada 100 g y su porción típica. Usalo SIEMPRE antes de registrar.',
+    description: 'Busca uno o varios alimentos en la base (en una sola llamada) y devuelve macros cada 100 g y porción típica. Usalo SIEMPRE antes de registrar.',
     parameters: {
       type: Type.OBJECT,
-      properties: { consulta: { type: Type.STRING, description: 'Nombre simple, ej: "empanada", "whey", "arroz"' } },
-      required: ['consulta'],
+      properties: { consultas: { type: Type.ARRAY, items: { type: Type.STRING }, description: 'Nombres simples, ej: ["empanada", "whey", "arroz"]' } },
+      required: ['consultas'],
     },
   },
   {
     name: 'crear_alimento',
     description:
-      'Agrega un alimento que NO está en la base, con valores estimados cada 100 g. ' +
-      'Usalo solo si buscar_alimento no encontró nada razonable.',
+      'Agrega uno o varios alimentos que NO están en la base, con valores estimados cada 100 g. ' +
+      'Usalo solo si buscar_alimento no encontró nada razonable. Mandá todos juntos en "alimentos".',
     parameters: {
       type: Type.OBJECT,
-      properties: {
+      properties: { alimentos: { type: Type.ARRAY, items: { type: Type.OBJECT, properties: {
         nombre: { type: Type.STRING },
         alias: { type: Type.ARRAY, items: { type: Type.STRING } },
         categoria: { type: Type.STRING, enum: ['alimento', 'bebida', 'suplemento'] },
@@ -58,7 +58,8 @@ export const declaraciones: FunctionDeclaration[] = [
         porcion_nombre: { type: Type.STRING },
         porcion_g: { type: Type.NUMBER },
       },
-      required: ['nombre', 'kcal_100', 'proteina_100', 'carbos_100', 'grasas_100'],
+      required: ['nombre', 'kcal_100', 'proteina_100', 'carbos_100', 'grasas_100'] } } },
+      required: ['alimentos'],
     },
   },
   {
@@ -166,13 +167,23 @@ export async function ejecutarTool(nombre: string, args: Args, chatId: number): 
     switch (nombre) {
       case 'actualizar_perfil': return await actualizarPerfil(chatId, args);
       case 'buscar_alimento': {
-        const data = ok(await db().rpc('buscar_alimentos', { q: String(args.consulta), limite: 6 }), 'buscar');
-        return { resultados: data ?? [], nota: (data ?? []).length ? undefined : 'Sin resultados: considerá crear_alimento.' };
+        const consultas = ((args.consultas as string[]) ?? [args.consulta as string]).filter(Boolean);
+        const resultados = await Promise.all(consultas.map(async (q) => {
+          const data = (ok(await db().rpc('buscar_alimentos', { q, limite: 3 }), 'buscar') ?? []) as Record<string, unknown>[];
+          return {
+            consulta: q,
+            encontrados: data.map(({ id, nombre, kcal_100, proteina_100, carbos_100, grasas_100, porcion_nombre, porcion_g }) =>
+              ({ id, nombre, kcal_100, proteina_100, carbos_100, grasas_100, porcion_nombre, porcion_g })),
+          };
+        }));
+        return { resultados, nota: 'Si un resultado no es el mismo alimento, ignoralo y crealo con crear_alimento.' };
       }
       case 'crear_alimento': {
-        const fila = { ...args, alias: args.alias ?? [], fuente: 'estimado_ia', creado_por: chatId };
-        const data = ok(await db().from('alimentos').insert(fila).select().single(), 'crear_alimento');
-        return { creado: data };
+        const lista = ((args.alimentos as Record<string, unknown>[]) ?? [args]).map((a) => ({
+          ...a, alias: a.alias ?? [], fuente: 'estimado_ia', creado_por: chatId,
+        }));
+        const data = ok(await db().from('alimentos').insert(lista).select('id, nombre, porcion_nombre, porcion_g'), 'crear_alimento');
+        return { creados: data };
       }
       case 'registrar_comida': return await registrarComida(chatId, args);
       case 'registrar_entrenamiento': {

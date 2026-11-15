@@ -1,4 +1,4 @@
-import { GoogleGenAI, type Content, type Part } from '@google/genai';
+import { GoogleGenAI, ThinkingLevel, type Content, type Part } from '@google/genai';
 import { db, ok } from './db';
 import { despensaComoTexto, verDespensa } from './despensa';
 import { env } from './env';
@@ -39,7 +39,8 @@ Despensa actual:
 ${despensaComoTexto(despensa)}
 
 CÓMO TRABAJÁS
-- Cuando el usuario cuenta lo que comió: para cada cosa llamá buscar_alimento, elegí el mejor match y registrá con registrar_comida (gramos = porciones × porcion_g). Si no existe, crealo con crear_alimento con valores realistas y aclarale que es una estimación.
+- Cuando el usuario cuenta lo que comió: buscá TODOS los alimentos en UNA sola llamada a buscar_alimento (lista en consultas), creá en UNA sola llamada a crear_alimento los que falten, y registrá todo junto con registrar_comida (gramos = porciones × porcion_g). Minimizá la cantidad de vueltas.
+- La búsqueda es aproximada: si un resultado NO es el mismo alimento (ej. buscaste "lechuga" y vino "Pechuga de pollo"), ignoralo y crealo. Al crear, usá valores realistas de tablas nutricionales y aclarale al usuario que es una estimación.
 - Si no dice cantidad, asumí una porción típica y decilo ("tomé 1 porción de ~150 g, avisame si fue más"). Preguntá solo si es muy ambiguo.
 - Si manda una foto de un plato, identificá los alimentos y estimá gramos; registralo y aclarale la estimación para que corrija.
 - Nunca inventes números de calorías: siempre salen de la base (buscar/crear alimento) o de las tools.
@@ -87,7 +88,11 @@ async function generar(contents: Content[], systemInstruction: string) {
       const resp = await cliente().models.generateContent({
         model,
         contents,
-        config: { systemInstruction, tools: [{ functionDeclarations: declaraciones }] },
+        config: {
+          systemInstruction,
+          tools: [{ functionDeclarations: declaraciones }],
+          thinkingConfig: { thinkingLevel: ThinkingLevel.LOW }, // rápido: es un chat
+        },
       });
       modeloQueAnda = model;
       return resp;
@@ -124,12 +129,12 @@ export async function responder(chatId: number, partes: Part[], textoHistorial: 
     const contenidoModelo = resp.candidates?.[0]?.content;
     if (contenidoModelo) contents.push(contenidoModelo);
 
-    const resultados: Part[] = [];
-    for (const llamada of llamadas) {
+    // Las llamadas de un mismo turno son independientes: se ejecutan en paralelo
+    const resultados: Part[] = await Promise.all(llamadas.map(async (llamada) => {
       const salida = await ejecutarTool(llamada.name!, (llamada.args ?? {}) as Record<string, unknown>, chatId);
-      console.log(`[tool] ${llamada.name}`, JSON.stringify(llamada.args), '→', JSON.stringify(salida).slice(0, 300));
-      resultados.push({ functionResponse: { id: llamada.id, name: llamada.name, response: salida } });
-    }
+      console.log(`[tool] ${llamada.name}`, JSON.stringify(llamada.args).slice(0, 200), '→', JSON.stringify(salida).slice(0, 200));
+      return { functionResponse: { id: llamada.id, name: llamada.name, response: salida } };
+    }));
     contents.push({ role: 'user', parts: resultados });
   }
 
