@@ -2,7 +2,7 @@ import type { Part } from '@google/genai';
 import { responder } from './agente';
 import { db } from './db';
 import { despensaComoTexto, verDespensa } from './despensa';
-import { env } from './env';
+import { comandoAdmin, verificarAcceso } from './acceso';
 import { formatearResumen, resumenDia } from './resumen';
 import { descargarArchivo, enviarMensaje, escribiendo, type TgUpdate } from './telegram';
 
@@ -24,11 +24,6 @@ export async function procesarUpdate(update: TgUpdate): Promise<void> {
   if (!msg) return;
   const chatId = msg.chat.id;
 
-  if (!env.allowedChatIds.includes(chatId)) {
-    await enviarMensaje(chatId, `Este bot es privado. (Tu chat id es ${chatId})`);
-    return;
-  }
-
   // Evitar procesar dos veces si Telegram reintenta
   const dup = await db().from('updates_procesados').insert({ update_id: update.update_id });
   if (dup.error) {
@@ -36,15 +31,13 @@ export async function procesarUpdate(update: TgUpdate): Promise<void> {
     throw new Error(dup.error.message);
   }
 
-  await db().from('usuarios').upsert(
-    { chat_id: chatId, nombre: msg.from?.first_name ?? null },
-    { onConflict: 'chat_id', ignoreDuplicates: true },
-  );
+  if (!(await verificarAcceso(msg))) return;
 
   try {
     const texto = (msg.text ?? msg.caption ?? '').trim();
     const comando = texto.split(/[\s@]/)[0].toLowerCase();
 
+    if (await comandoAdmin(chatId, comando, texto)) return;
     if (comando === '/start') return enviarMensaje(chatId, BIENVENIDA);
     if (comando === '/hoy') return enviarMensaje(chatId, formatearResumen(await resumenDia(chatId)));
     if (comando === '/despensa') return enviarMensaje(chatId, `🧺 Tu despensa\n${despensaComoTexto(await verDespensa(chatId))}`);

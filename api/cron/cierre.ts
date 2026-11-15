@@ -1,4 +1,5 @@
 import { responder } from '../../lib/agente';
+import { usuariosHabilitados } from '../../lib/acceso';
 import { env } from '../../lib/env';
 import { resumenDia } from '../../lib/resumen';
 import { enviarMensaje } from '../../lib/telegram';
@@ -9,7 +10,7 @@ export async function GET(request: Request): Promise<Response> {
     return new Response('forbidden', { status: 401 });
   }
 
-  for (const chatId of env.allowedChatIds) {
+  for (const chatId of await usuariosHabilitados()) {
     try {
       const r = await resumenDia(chatId);
       if (!r.comidas.length) {

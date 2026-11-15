@@ -282,3 +282,10 @@ alter table alimentos add column if not exists marca text;
 drop policy if exists alimentos_insert_off on alimentos;
 create policy alimentos_insert_off on alimentos for insert to authenticated
   with check (fuente = 'off' and creado_por in (select mis_chat_ids()));
+
+-- ===== supabase/005_acceso.sql =====
+-- Acceso por aprobación (sin redeploys): el admin aprueba usuarios desde Telegram
+alter table usuarios add column if not exists habilitado boolean not null default false;
+alter table usuarios add column if not exists es_admin boolean not null default false;
+alter table usuarios add column if not exists solicitado_en timestamptz;
+alter table usuarios add column if not exists username text;

@@ -14,8 +14,9 @@ export const env = {
     return process.env.TELEGRAM_WEBHOOK_SECRET
       || createHash('sha256').update(`nutri-webhook:${requerida('TELEGRAM_BOT_TOKEN')}`).digest('hex').slice(0, 48);
   },
+  /** Opcional: chat ids que siempre son admin. El acceso normal se maneja en la base. */
   get allowedChatIds(): number[] {
-    return requerida('ALLOWED_CHAT_IDS').split(',').map((s) => Number(s.trim())).filter(Boolean);
+    return (process.env.ALLOWED_CHAT_IDS ?? '').split(',').map((s) => Number(s.trim())).filter(Boolean);
   },
   get supabaseUrl() { return requerida('SUPABASE_URL'); },
   get supabaseKey() { return requerida('SUPABASE_SERVICE_ROLE_KEY'); },

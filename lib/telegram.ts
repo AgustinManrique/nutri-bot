@@ -3,7 +3,7 @@ import { env } from './env';
 export interface TgMessage {
   message_id: number;
   chat: { id: number };
-  from?: { first_name?: string };
+  from?: { first_name?: string; username?: string };
   text?: string;
   caption?: string;
   photo?: { file_id: string; width: number; height: number }[];
