@@ -14,6 +14,8 @@ function ok<T>(res: { data: T; error: { message: string } | null }): T {
 
 export function crearApiReal(sb: SupabaseClient): Api {
   let chatId: number | null = null;
+  const oyentes = new Set<(t: Tabla) => void>();
+  let canal: ReturnType<SupabaseClient['channel']> | null = null;
 
   const perfil = async (): Promise<Perfil | null> => {
     const p = ok(await sb.from('usuarios').select('*').maybeSingle()) as Perfil | null;
@@ -104,12 +106,16 @@ export function crearApiReal(sb: SupabaseClient): Api {
       ));
     },
     escuchar(cb) {
-      const canal = sb.channel('cambios');
-      for (const t of ['comidas', 'entrenamientos', 'despensa', 'usuarios'] as Tabla[]) {
-        canal.on('postgres_changes', { event: '*', schema: 'public', table: t }, () => cb(t));
+      // Un solo canal compartido para toda la app; cada pantalla agrega/quita su oyente
+      oyentes.add(cb);
+      if (!canal) {
+        canal = sb.channel(`cambios-${crypto.randomUUID()}`);
+        for (const t of ['comidas', 'entrenamientos', 'despensa', 'usuarios'] as Tabla[]) {
+          canal.on('postgres_changes', { event: '*', schema: 'public', table: t }, () => oyentes.forEach((o) => o(t)));
+        }
+        canal.subscribe();
       }
-      canal.subscribe();
-      return () => { sb.removeChannel(canal); };
+      return () => { oyentes.delete(cb); };
     },
   };
 }
