@@ -1,0 +1,24 @@
+{
+  "buildCommand": "npm --prefix web ci && npm --prefix web run build",
+  "outputDirectory": "web/dist",
+  "rewrites": [
+    {
+      "source": "/((?!api/).*)",
+      "destination": "/index.html"
+    }
+  ],
+  "functions": {
+    "api/telegram.ts": {
+      "maxDuration": 60
+    },
+    "api/cron/cierre.ts": {
+      "maxDuration": 60
+    }
+  },
+  "crons": [
+    {
+      "path": "/api/cron/cierre",
+      "schedule": "30 23 * * *"
+    }
+  ]
+}

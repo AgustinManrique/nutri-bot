@@ -1,0 +1,25 @@
+{
+  "name": "nutri-bot",
+  "version": "1.0.0",
+  "description": "Asistente nutricional personal en Telegram (Gemini + Supabase + Vercel)",
+  "scripts": {
+    "dev": "node --env-file=.env --import tsx scripts/polling.ts",
+    "webhook": "node --env-file=.env --import tsx scripts/set-webhook.ts",
+    "typecheck": "tsc --noEmit",
+    "web": "npm --prefix web run dev"
+  },
+  "license": "ISC",
+  "dependencies": {
+    "@google/genai": "^3.3.0",
+    "@supabase/supabase-js": "^2.119.0"
+  },
+  "devDependencies": {
+    "@types/node": "^26.6.6",
+    "tsx": "^4.23.15",
+    "typescript": "^7.0.2"
+  },
+  "private": true,
+  "engines": {
+    "node": ">=20.6"
+  }
+}
